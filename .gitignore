@@ -29,5 +29,9 @@
 *.hex
 
 # Debug files
+/bin
+/obj
+*.txt
+.DS_Store
 *.dSYM/
 *.su
