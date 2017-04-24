@@ -24,6 +24,7 @@ static void freePtr(void* ptr){
 	ptr = NULL;
 }
 
+// Destructive function, quck and dirty mutli delim string tokenizer 
 static char* Str_Tok_Multi(char* str, char const* delims){
 	static char* src = NULL;
 	char* p, *ret = 0;
