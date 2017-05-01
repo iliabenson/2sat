@@ -24,7 +24,7 @@ static void freePtr(void* ptr){
 	ptr = NULL;
 }
 
-// Destructive function, quck and dirty mutli delim string tokenizer 
+// Destructive function, quck and dirty mutli delim string tokenizer
 static char* Str_Tok_Multi(char* str, char const* delims){
 	static char* src = NULL;
 	char* p, *ret = 0;
@@ -85,7 +85,7 @@ static struct satEntry* readValues(int* lines, char* filename, int* max){
 
 	rewind(fp);
 
-	entries = (struct satEntry*)malloc(count * sizeof(struct satEntry));
+	entries = (struct satEntry*)malloc(*lines * sizeof(struct satEntry));
 
 	while(fgets(buffer, lineSize, fp) != NULL){
 		if(buffer[strlen(buffer) - 1] == '\n'){
@@ -110,9 +110,35 @@ static struct satEntry* readValues(int* lines, char* filename, int* max){
 	return entries;
 }
 
+static void greedyAnalysis(struct satEntry* entries, int* literlCountNeg, int* literlCount, int max){
+	size_t i;
+	int j;
+
+	for(i = 0; i < sizeof(entries)/sizeof(struct satEntry); i++){
+		if(entries[i].left < 0){
+			literlCountNeg[abs(entries[i].left)]++;
+		}
+		else{
+			literlCount[entries[i].left]++;
+		}
+		if(entries[i].right < 0){
+			literlCountNeg[abs(entries[i].right)]++;
+		}
+		else{
+			literlCount[entries[i].right]++;
+		}
+	}
+
+	for(j = 0; j < max; j++){
+		//
+	}
+}
+
 int main(int argc, char* argv[]){
 	struct satEntry* entries = NULL;
 	char* booleanValues = NULL;
+	int* literlCount = NULL;
+	int* literlCountNeg = NULL;
 	int lines = 0;
 	int max = 0;
 
@@ -122,8 +148,11 @@ int main(int argc, char* argv[]){
 	}
 
 	entries = readValues(&lines, argv[1], &max);
-	// testPrint(lines, entries);
+	testPrint(lines, entries);
 	printf("Number of tuples: %d, Max number: %d\n", lines, max);
+	literlCount = (int*)calloc(max, sizeof(int));
+	literlCountNeg = (int*)calloc(max, sizeof(int));
+	greedyAnalysis(entries, literlCountNeg, literlCount, max);
 	booleanValues = (char*)malloc(max * sizeof(char));
 	memset(booleanValues, 'T', max);
 
