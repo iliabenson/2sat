@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <assert.h>
 
 static const int lineSize = 1024;
+
+// @TODO: verify inline functions are properly inlined
 
 struct satVariable{
 	int64_t label; // variable label, and index into variableValues array
@@ -374,6 +377,192 @@ static inline int64_t evaluateAssignments(int64_t* terminals, int64_t numTermina
 	return count;
 }
 
+static int64_t randint(int64_t n) {
+	if((n - 1) == RAND_MAX){
+		return rand();
+	}else{
+
+	int64_t end = RAND_MAX / n;
+	assert (end > 0L);
+	end *= n;
+
+	int64_t r;
+	while ((r = rand()) >= end);
+
+	return r % n;
+	}
+}
+
+static inline int64_t selectRandVariable(int64_t* unSatTerminals, int64_t numUnSatTerminals, int64_t* reverseLookUpTable){
+	int64_t randIndex = randint(numUnSatTerminals);
+	int64_t selectedVariableIndex = -1;
+
+	// decide if i want left or right sibling
+	// if even i want left sibling, otherwise choose right
+	if(randint(numUnSatTerminals) % 2 == 0){
+		if(randIndex % 2 == 0){
+			selectedVariableIndex = reverseLookUpTable[abs(unSatTerminals[randIndex])];
+		}
+		else{
+			selectedVariableIndex = reverseLookUpTable[abs(unSatTerminals[randIndex - 1])];
+		}
+	}
+	else{
+		if(randIndex % 2 == 0){
+			selectedVariableIndex = reverseLookUpTable[abs(unSatTerminals[randIndex + 1])];
+		}
+		else{
+			selectedVariableIndex = reverseLookUpTable[abs(unSatTerminals[randIndex])];
+		}
+	}
+
+	return selectedVariableIndex; // in variableTable
+}
+
+static inline void flipVariableValue(struct satVariable* variable){
+	if(variable->value == 'T'){
+		variable->value = 'F';
+	}
+	else{
+		variable->value = 'T';
+	}
+}
+
+static int64_t* makeUnSatTerminals(int64_t* numUnSatTerminals, int64_t* terminals, int64_t numTerminals, char* variableValues){
+	int64_t i;
+	int64_t clauses = 0;
+	int64_t* unSatTerminals = NULL;
+
+	for(i = 0; i < numTerminals - 1; i += 2){
+		if(terminals[i] > 0 && terminals[i + 1] > 0){
+			if(variableValues[abs(terminals[i])] == 'F' || variableValues[abs(terminals[i + 1])] == 'F'){
+				clauses++;
+			}
+		}
+		else if(terminals[i] > 0 && terminals[i + 1] < 0){
+			if(variableValues[abs(terminals[i])] == 'F' || variableValues[abs(terminals[i + 1])] == 'T'){
+				clauses++;
+			}
+		}
+		else if(terminals[i] < 0 && terminals[i + 1] > 0){
+			if(variableValues[abs(terminals[i])] == 'T' || variableValues[abs(terminals[i + 1])] == 'F'){
+				clauses++;
+			}
+		}
+		else if(terminals[i] < 0 && terminals[i + 1] < 0){
+			if(variableValues[abs(terminals[i])] == 'T' || variableValues[abs(terminals[i + 1])] == 'T'){
+				clauses++;
+			}
+		}
+	}
+
+	*numUnSatTerminals = clauses * 2; // i just counted clauses
+	unSatTerminals = (int64_t*)malloc((clauses * 2) * sizeof(int64_t));
+	clauses = 0;
+
+	for(i = 0; i < numTerminals - 1; i += 2){
+		if(terminals[i] > 0 && terminals[i + 1] > 0){
+			if(variableValues[abs(terminals[i])] == 'F' || variableValues[abs(terminals[i + 1])] == 'F'){
+				unSatTerminals[clauses] = terminals[i];
+				unSatTerminals[clauses + 1] = terminals[i + 1];
+				clauses += 2;
+			}
+		}
+		else if(terminals[i] > 0 && terminals[i + 1] < 0){
+			if(variableValues[abs(terminals[i])] == 'F' || variableValues[abs(terminals[i + 1])] == 'T'){
+				unSatTerminals[clauses] = terminals[i];
+				unSatTerminals[clauses + 1] = terminals[i + 1];
+				clauses += 2;
+			}
+		}
+		else if(terminals[i] < 0 && terminals[i + 1] > 0){
+			if(variableValues[abs(terminals[i])] == 'T' || variableValues[abs(terminals[i + 1])] == 'F'){
+				unSatTerminals[clauses] = terminals[i];
+				unSatTerminals[clauses + 1] = terminals[i + 1];
+				clauses += 2;
+			}
+		}
+		else if(terminals[i] < 0 && terminals[i + 1] < 0){
+			if(variableValues[abs(terminals[i])] == 'T' || variableValues[abs(terminals[i + 1])] == 'T'){
+				unSatTerminals[clauses] = terminals[i];
+				unSatTerminals[clauses + 1] = terminals[i + 1];
+				clauses += 2;
+			}
+		}
+	}
+
+	return unSatTerminals;
+}
+
+static int64_t* removeClausesWithVariable(int64_t variableLabel, int64_t* unSatTerminals, int64_t* numUnSatTerminals){
+	int64_t i;
+	int64_t size = 0;
+	int64_t* newArray = (int64_t*)malloc(*numUnSatTerminals * sizeof(int64_t));
+
+	for(i = 0; i < *numUnSatTerminals; i++){
+		if(abs(unSatTerminals[i]) != variableLabel){
+			newArray[size] = unSatTerminals[i];
+			size++;
+		}
+	}
+
+	freePtr(unSatTerminals);
+	*numUnSatTerminals = size;
+	newArray = (int64_t*)realloc(newArray, size * sizeof(int64_t));
+	return newArray;
+}
+
+static void GSAT(int64_t maxTries, int64_t* result, int64_t* terminals, int64_t numTerminals, struct satVariable* variableTable, int64_t numVariableTable, char* variableValues, int64_t* reverseLookUpTable){
+	int64_t i;
+	int64_t lastVariableFlippedIndex = -1;
+	int64_t currentResult = 0;
+	int64_t* unSatTerminals = NULL;
+	int64_t numUnSatTerminals = 0;
+
+	unSatTerminals = makeUnSatTerminals(&numUnSatTerminals, terminals, numTerminals, variableValues);
+
+	for(i = 0; i < maxTries; i++){
+		// still have tries but dont have any more unchecked variables to check
+		if(numUnSatTerminals == 0){
+			break;
+		}
+
+		// all possible clauses satisfied, i can stop
+		if(numTerminals / 2 == *result){
+			break;
+		}
+
+		lastVariableFlippedIndex = selectRandVariable(unSatTerminals, numUnSatTerminals, reverseLookUpTable);
+		flipVariableValue(&variableTable[lastVariableFlippedIndex]);
+
+		updateVariableValues(variableValues, variableTable, numVariableTable);
+		currentResult = evaluateAssignments(terminals, numTerminals, variableValues);
+
+		if(currentResult > *result){
+			*result = currentResult;
+			// rebuild unSatTerminals array
+			freePtr(unSatTerminals);
+			unSatTerminals = makeUnSatTerminals(&numUnSatTerminals, terminals, numTerminals, variableValues);
+		}
+		else{
+			// flip the value back, it will get updated next time through loop along the next selected variable being tested
+			flipVariableValue(&variableTable[lastVariableFlippedIndex]);
+
+			// remove all caluses from unSatTerminals with lastVariableFlippedIndex
+			unSatTerminals = removeClausesWithVariable(variableTable[lastVariableFlippedIndex].label, unSatTerminals, &numUnSatTerminals);
+			lastVariableFlippedIndex = -1;
+
+			// in case the next increment would exceed maxTries and i had an unsuccessfully last check, i want to restore my previous answer
+			if(i == maxTries - 1){
+				updateVariableValues(variableValues, variableTable, numVariableTable);
+				*result = evaluateAssignments(terminals, numTerminals, variableValues);
+			}
+		}
+	}
+
+	freePtr(unSatTerminals);
+}
+
 int main(int argc, char* argv[]){
 	int64_t i;
 	int64_t* terminals = NULL; // all the terminals as they appear in the file, a terminal is a variable in a clause so (A v A) has 2 terminals but 1 variable
@@ -383,9 +572,12 @@ int main(int argc, char* argv[]){
 	int64_t numVariableValues = 0; // number of variables in the files (used and unused)
 	struct satVariable* variableTable = NULL; // used for evaluation of each used variable, contains relevant info for that variable
 	int64_t numVariableTable = 0; // number of used variables in the file only
+	int64_t result = 0;
+	int64_t maxTries;
 
 	if(argc <= 1){
 		perror("ERROR: Must pass in file name of values!");
+		perror("Can specify the maximum number of tries for GSAT with a second parameter, must be integer");
 		exit(EXIT_FAILURE);
 	}
 
@@ -394,13 +586,26 @@ int main(int argc, char* argv[]){
 	variableTable = makeVariableTable(terminals, numTerminals, numVariableTable);
 	reverseLookUpTable = makeReverseLookUpTable(reverseLookUpTable, numVariableValues, variableTable, numVariableTable);
 
+	// use waited greedy to make a seeder assignment for GSAT
 	greedyAnalysis(terminals, numTerminals, variableTable, numVariableTable, reverseLookUpTable);
 
 	// @TODO: comment this out before submission
 	// testPrint(terminals, numTerminals, variableValues, numVariableValues, variableTable, numVariableTable);
 
 	updateVariableValues(variableValues, variableTable, numVariableTable);
-	printf("Greedy Solution: %lld\n", evaluateAssignments(terminals, numTerminals, variableValues));
+	result = evaluateAssignments(terminals, numTerminals, variableValues);
+	printf("Greedy Solution: %lld\n", result);
+	printValues(variableValues, numVariableValues);
+
+	// use GSAT as local search algorithm to improve answer, default for maxTries is 1/2 of the number of clauses, i think this is a good default
+	// but the default can be over written by the user if so chosen.
+	// this version of GSAT is greedy, we do not choose a random clause, but rather we choose a random clause from all unsatisfied clauses
+	maxTries = numTerminals / 2;
+	if(argc == 3){
+		maxTries = atoi(argv[2]);
+	}
+	GSAT(maxTries, &result, terminals, numTerminals, variableTable, numVariableTable, variableValues, reverseLookUpTable);
+	printf("GSAT Solution: %lld\n", result);
 	printValues(variableValues, numVariableValues);
 
 	freePtr(terminals);
