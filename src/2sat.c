@@ -397,6 +397,8 @@ static inline int64_t selectRandVariable(int64_t* unSatTerminals, int64_t numUnS
 	int64_t randIndex = randint(numUnSatTerminals);
 	int64_t selectedVariableIndex = -1;
 
+	// TODO: make sure that if i choose a variable that has value X (didnt matter) i reroll my choice
+
 	// decide if i want left or right sibling
 	// if even i want left sibling, otherwise choose right
 	if(randint(numUnSatTerminals) % 2 == 0){
@@ -518,6 +520,8 @@ static void GSAT(int64_t maxTries, int64_t* result, int64_t* terminals, int64_t 
 	int64_t currentResult = 0;
 	int64_t* unSatTerminals = NULL;
 	int64_t numUnSatTerminals = 0;
+
+	// TODO: maybe modify this so that it uses all the terminals for random selection?
 
 	unSatTerminals = makeUnSatTerminals(&numUnSatTerminals, terminals, numTerminals, variableValues);
 
