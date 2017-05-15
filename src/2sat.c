@@ -27,43 +27,43 @@ static void freePtr(void* ptr){
 }
 
 // @TODO: comment this out before submission
-static void testPrint(int64_t* terminals, int64_t numTerminals, char* variableValues, int64_t numVariableValues, struct satVariable* variableTable, int64_t numVariableTable){
-	int64_t i, j;
+// static void testPrint(int64_t* terminals, int64_t numTerminals, char* variableValues, int64_t numVariableValues, struct satVariable* variableTable, int64_t numVariableTable){
+// 	int64_t i, j;
 
-	printf("Total number of terminals: %lld\n", numTerminals);
-	printf("Total number of clauses: %lld\n", numTerminals / 2);
-	printf("Number of variables: %lld\n", numVariableValues);
-	printf("Number of used variables: %lld\n", numVariableTable);
+// 	printf("Total number of terminals: %lld\n", numTerminals);
+// 	printf("Total number of clauses: %lld\n", numTerminals / 2);
+// 	printf("Number of variables: %lld\n", numVariableValues);
+// 	printf("Number of used variables: %lld\n", numVariableTable);
 
-	for(i = 0; i < numTerminals; i++){
-		printf("%lld ", terminals[i]);
+// 	for(i = 0; i < numTerminals; i++){
+// 		printf("%lld ", terminals[i]);
 
-		if(i % 2 != 0){
-			printf("\n");
-		}
-	}
+// 		if(i % 2 != 0){
+// 			printf("\n");
+// 		}
+// 	}
 
-	for(i = 0; i <= numVariableValues; i++){
-		printf("%c ", variableValues[i]);
-	}
+// 	for(i = 0; i <= numVariableValues; i++){
+// 		printf("%c ", variableValues[i]);
+// 	}
 
-	printf("\n\n");
+// 	printf("\n\n");
 
-	for(i = 0; i < numVariableTable; i++){
-		printf("Variable: %lld, Value: %c, Positive Count: %lld/%lld, Negated Count: %lld/%lld\n", variableTable[i].label, variableTable[i].value, variableTable[i].count, variableTable[i].weightedCount, variableTable[i].negCount, variableTable[i].negWeightedCount);
-		printf("Evaluated: %c, Mattered: %c\n", variableTable[i].evaluated, variableTable[i].mattered);
-		printf("Positive Index locations in terminals array: ");
-		for(j = 0; j < variableTable[i].count; j++){
-			printf("%lld ", variableTable[i].indexes[j]);
-		}
-		printf("\n");
-		printf("Negated Index locations in terminals array: ");
-		for(j = 0; j < variableTable[i].negCount; j++){
-			printf("%lld ", variableTable[i].negIndexes[j]);
-		}
-		printf("\n\n");
-	}
-}
+// 	for(i = 0; i < numVariableTable; i++){
+// 		printf("Variable: %lld, Value: %c, Positive Count: %lld/%lld, Negated Count: %lld/%lld\n", variableTable[i].label, variableTable[i].value, variableTable[i].count, variableTable[i].weightedCount, variableTable[i].negCount, variableTable[i].negWeightedCount);
+// 		printf("Evaluated: %c, Mattered: %c\n", variableTable[i].evaluated, variableTable[i].mattered);
+// 		printf("Positive Index locations in terminals array: ");
+// 		for(j = 0; j < variableTable[i].count; j++){
+// 			printf("%lld ", variableTable[i].indexes[j]);
+// 		}
+// 		printf("\n");
+// 		printf("Negated Index locations in terminals array: ");
+// 		for(j = 0; j < variableTable[i].negCount; j++){
+// 			printf("%lld ", variableTable[i].negIndexes[j]);
+// 		}
+// 		printf("\n\n");
+// 	}
+// }
 
 // Destructive function, quick and dirty mutli delim string tokenizer
 static char* Str_Tok_Multi(char* str, char const* delims){
@@ -620,4 +620,6 @@ int main(int argc, char* argv[]){
 		freePtr(variableTable[i].negIndexes);
 	}
 	freePtr(variableTable);
+
+	return 0;
 }
