@@ -15,6 +15,7 @@ struct satVariable{
 	int64_t negCount; // same but negated
 	int64_t negWeightedCount; // same but negated
 	char evaluated;
+	char mattered;
 };
 
 static void freePtr(void* ptr){
@@ -22,6 +23,7 @@ static void freePtr(void* ptr){
 	ptr = NULL;
 }
 
+// @TODO: comment this out before submission
 static void testPrint(int64_t* terminals, int64_t numTerminals, char* variableValues, int64_t numVariableValues, struct satVariable* variableTable, int64_t numVariableTable){
 	int64_t i, j;
 
@@ -46,7 +48,7 @@ static void testPrint(int64_t* terminals, int64_t numTerminals, char* variableVa
 
 	for(i = 0; i < numVariableTable; i++){
 		printf("Variable: %lld, Value: %c, Positive Count: %lld/%lld, Negated Count: %lld/%lld\n", variableTable[i].label, variableTable[i].value, variableTable[i].count, variableTable[i].weightedCount, variableTable[i].negCount, variableTable[i].negWeightedCount);
-		printf("Evaluated: %c\n", variableTable[i].evaluated);
+		printf("Evaluated: %c, Mattered: %c\n", variableTable[i].evaluated, variableTable[i].mattered);
 		printf("Positive Index locations in terminals array: ");
 		for(j = 0; j < variableTable[i].count; j++){
 			printf("%lld ", variableTable[i].indexes[j]);
@@ -145,8 +147,8 @@ static char* findUsedVariables(int64_t* terminals, int64_t numTerminals , int64_
 	int64_t i;
 
 	char* variableValues = (char*)malloc((numVariableValues + 1) * sizeof(char));
-	memset(variableValues, 'F', (numVariableValues + 1) * sizeof(char));
-	variableValues[0] = 'X';
+	memset(variableValues, 'X', (numVariableValues + 1) * sizeof(char)); // is value for this variable is not used in clauses, and there does not matter, however, for greedy if the variables sibling already sat the clause than it's value for that clause is 0, a variable can be used and have 0 weight, thus it is also represented by an X, later updated to F for purposes of assignment.
+	variableValues[0] = 'S'; // P is just a place holder, should never print except for testPrint
 
 	for(i = 0; i < numTerminals; i++){
 		variableValues[abs(terminals[i])] = 'T'; // set all the present variables to T
@@ -192,8 +194,9 @@ static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerm
 				variableTable[j].weightedCount = 0;
 				variableTable[j].negIndexes = (int64_t*)malloc(numTerminals * sizeof(int64_t));
 				variableTable[j].negCount = 0;
-				variableTable[j].evaluated = 'F';
 				variableTable[j].negWeightedCount = 0;
+				variableTable[j].evaluated = 'F';
+				variableTable[j].mattered = 'T';
 
 				if(terminals[i] > 0){
 					variableTable[j].indexes[variableTable[j].count] = i;
@@ -211,7 +214,13 @@ static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerm
 		}
 	}
 
-	// @TODO: shrink indexes and negIndexes
+	// Shrink the indexes arrays, this is a bottle neck
+	// for test 4 mem usage spikes above 2gb before shrink
+	// for test 5 mem usage spikes above 4gb before shrink
+	for(j = 0; j < numVariableTable; j++){
+		variableTable[j].indexes = (int64_t*)realloc(variableTable[j].indexes, variableTable[j].count * sizeof(int64_t));
+		variableTable[j].negIndexes = (int64_t*)realloc(variableTable[j].negIndexes, variableTable[j].negCount * sizeof(int64_t));
+	}
 
 	return variableTable;
 }
@@ -229,32 +238,140 @@ static int64_t* makeReverseLookUpTable(int64_t* reverseLookUpTable, int64_t numV
 	return reverseLookUpTable;
 }
 
-static inline int64_t findVariableInTable(struct satVariable* variableTable, int64_t numVariableTable, int64_t target){
-	// use reverse look up table, make inline functions
+static inline void decrementSibWeight(int64_t instance, int64_t* terminals, struct satVariable* variableTable, int64_t* reverseLookUpTable){
+	int64_t sibling;
+	int64_t variabltTableIndex;
+
+	// determine if instance is left variable or right variable in the clause
+	if(instance % 2 == 0){
+		sibling = instance + 1;
+	}
+	else{
+		sibling = instance - 1;
+	}
+	// get sibling and look up it's index in reverseLookUpTable
+	// use the result to decrement its pos or neg weight in variableTable
+	if(terminals[sibling] > 0){
+		variabltTableIndex = reverseLookUpTable[terminals[sibling]];
+		variableTable[variabltTableIndex].weightedCount--;
+	}
+	else{
+		variabltTableIndex = reverseLookUpTable[abs(terminals[sibling])];
+		variableTable[variabltTableIndex].negWeightedCount--;
+	}
 }
 
-static void greedyAnalysis(int64_t* terminals, int64_t numTerminals, char* variableValues, int64_t numVariableValues, struct satVariable* variableTable, int64_t numVariableTable){
+static void greedyAnalysis(int64_t* terminals, int64_t numTerminals, struct satVariable* variableTable, int64_t numVariableTable, int64_t* reverseLookUpTable){
 	int64_t count = 0;
-	int64_t totalSat = 0;
+	int64_t dominant = 0;
 	int64_t i, current, largest;
 
 	while(count < numTerminals){
 		largest = 0;
 		current = -1;
 		for(i = 0; i < numVariableTable; i++){
-			if(variableTable[i].evaluation == 'F' && (variableTable[i].count > largest || variableTable[i].negCount > largest)){
+			if(variableTable[i].evaluated == 'F' && (variableTable[i].weightedCount >= largest || variableTable[i].negWeightedCount >= largest)){
 				current = i;
-				if(variableTable[i].count > variableTable[i].negCount){
-					largest = variableTable[i].count;
+				if(variableTable[i].weightedCount > variableTable[i].negWeightedCount){
+					largest = variableTable[i].weightedCount;
+					dominant = 1;
 				}
 				else{
-					largest = variableTable[i].negCount;
+					largest = variableTable[i].negWeightedCount;
+					dominant = -1;
 				}
 			}
 		}
 
-		count += variableTable[i].weightedCount;
+		// found current largest
+		// assign value T/F
+		if(dominant > 0){
+			variableTable[current].value = 'T';
+		}
+		else{
+			variableTable[current].value = 'F';
+		}
+		// set evaluated to T
+		variableTable[current].evaluated = 'T';
+
+		// if largest is 0, it means i am examining an item that has no weight, thus its value does not matter but i still need to evaluate it
+		// this is probably due to it's sibling satifying the clauses, thus their weights do not need to be decremented as they are already at 0
+		if(largest == 0){
+			variableTable[current].mattered = 'F';
+		}else{
+			// go through currents indexes and decrease all of it's siblings weights by 1 since those clauses have been satisfied and siblings have no weight in them
+			// over decrementation is fine, only happens when variable has already been evaluated and set to -1 weight previously, all other decrementations are valid
+			for(i = 0; i < variableTable[current].count; i++){
+				decrementSibWeight(variableTable[current].indexes[i], terminals, variableTable, reverseLookUpTable);
+			}
+			for(i = 0; i < variableTable[current].negCount; i++){
+				decrementSibWeight(variableTable[current].negIndexes[i], terminals, variableTable, reverseLookUpTable);
+			}
+		}
+
+		// set weights to -1 since it has none anymore, weight will continue to decrease but as long as it is in the negatives after being evaluated all is fine
+		variableTable[current].weightedCount = -1;
+		variableTable[current].negWeightedCount = -1;
+
+		// increment count by currents total pos and neg counts
+		count = count + variableTable[current].count + variableTable[current].negCount;
 	}
+}
+
+static inline void updateVariableValues(char* variableValues, struct satVariable* variableTable, int64_t numVariableTable){
+	int64_t i;
+
+	for(i = 0; i < numVariableTable; i++){
+		if(variableTable[i].mattered == 'T'){
+			variableValues[variableTable[i].label] = variableTable[i].value;
+		}
+		else{
+			// variables whose weight was 0 (should never be less than 0 before evaluation) dont do anything for greedy as their value does not change the
+			// status of the clauses they are in. they are set to X, like unused variables for local search improvements.
+			variableValues[variableTable[i].label] = 'X';
+		}
+	}
+}
+
+static inline void printValues(char* variableValues, int64_t numVariableValues){
+	int64_t i;
+
+	for(i = 1; i <= numVariableValues; i++){
+		// @TODO: make this a file instead of stdout
+		printf("%c ", variableValues[i]);
+	}
+
+	printf("\n");
+}
+
+static inline int64_t evaluateAssignments(int64_t* terminals, int64_t numTerminals, char* variableValues){
+	int64_t i;
+	int64_t count = 0;
+
+	for(i = 0; i < numTerminals - 1; i += 2){
+		if(terminals[i] > 0 && terminals[i + 1] > 0){
+			if(variableValues[abs(terminals[i])] == 'T' || variableValues[abs(terminals[i + 1])] == 'T'){
+				count++;
+			}
+		}
+		else if(terminals[i] > 0 && terminals[i + 1] < 0){
+			if(variableValues[abs(terminals[i])] == 'T' || variableValues[abs(terminals[i + 1])] == 'F'){
+				count++;
+			}
+		}
+		else if(terminals[i] < 0 && terminals[i + 1] > 0){
+			if(variableValues[abs(terminals[i])] == 'F' || variableValues[abs(terminals[i + 1])] == 'T'){
+				count++;
+			}
+		}
+		else if(terminals[i] < 0 && terminals[i + 1] < 0){
+			if(variableValues[abs(terminals[i])] == 'F' || variableValues[abs(terminals[i + 1])] == 'F'){
+				count++;
+			}
+		}
+	}
+
+	return count;
 }
 
 int main(int argc, char* argv[]){
@@ -277,10 +394,18 @@ int main(int argc, char* argv[]){
 	variableTable = makeVariableTable(terminals, numTerminals, numVariableTable);
 	reverseLookUpTable = makeReverseLookUpTable(reverseLookUpTable, numVariableValues, variableTable, numVariableTable);
 
+	greedyAnalysis(terminals, numTerminals, variableTable, numVariableTable, reverseLookUpTable);
+
+	// @TODO: comment this out before submission
 	testPrint(terminals, numTerminals, variableValues, numVariableValues, variableTable, numVariableTable);
+
+	updateVariableValues(variableValues, variableTable, numVariableTable);
+	printf("Greedy Solution: %lld\n", evaluateAssignments(terminals, numTerminals, variableValues));
+	printValues(variableValues, numVariableValues);
 
 	freePtr(terminals);
 	freePtr(variableValues);
+	freePtr(reverseLookUpTable);
 	for(i = 0; i < numVariableTable; i++){
 		freePtr(variableTable[i].indexes);
 		freePtr(variableTable[i].negIndexes);
