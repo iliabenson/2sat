@@ -397,7 +397,7 @@ int main(int argc, char* argv[]){
 	greedyAnalysis(terminals, numTerminals, variableTable, numVariableTable, reverseLookUpTable);
 
 	// @TODO: comment this out before submission
-	testPrint(terminals, numTerminals, variableValues, numVariableValues, variableTable, numVariableTable);
+	// testPrint(terminals, numTerminals, variableValues, numVariableValues, variableTable, numVariableTable);
 
 	updateVariableValues(variableValues, variableTable, numVariableTable);
 	printf("Greedy Solution: %lld\n", evaluateAssignments(terminals, numTerminals, variableValues));
