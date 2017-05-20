@@ -7,7 +7,6 @@
 static const int lineSize = 1024;
 
 // @TODO: verify inline functions are properly inlined
-// @TODO: need to remove mattered and X, GSAT does not account for it and the evaluation function may be thrown off since mattered is not updated on variable flip, can account for that but probably should not
 
 struct satVariable{
 	int64_t label; // variable label, and index into variableValues array
@@ -20,7 +19,6 @@ struct satVariable{
 	int64_t negCount; // same but negated
 	int64_t negWeightedCount; // same but negated
 	char evaluated;
-	char mattered;
 };
 
 static void freePtr(void* ptr){
@@ -53,7 +51,7 @@ static void freePtr(void* ptr){
 
 // 	for(i = 0; i < numVariableTable; i++){
 // 		printf("Variable: %lld, Value: %c, Positive Count: %lld/%lld, Negated Count: %lld/%lld\n", variableTable[i].label, variableTable[i].value, variableTable[i].count, variableTable[i].weightedCount, variableTable[i].negCount, variableTable[i].negWeightedCount);
-// 		printf("Evaluated: %c, Mattered: %c\n", variableTable[i].evaluated, variableTable[i].mattered);
+// 		printf("Evaluated: %c\n", variableTable[i].evaluated);
 // 		printf("Positive Index locations in terminals array: ");
 // 		for(j = 0; j < variableTable[i].count; j++){
 // 			printf("%lld ", variableTable[i].indexes[j]);
@@ -152,7 +150,7 @@ static char* findUsedVariables(int64_t* terminals, int64_t numTerminals , int64_
 	int64_t i;
 
 	char* variableValues = (char*)malloc((numVariableValues + 1) * sizeof(char));
-	memset(variableValues, 'X', (numVariableValues + 1) * sizeof(char)); // is value for this variable is not used in clauses, and there does not matter, however, for greedy if the variables sibling already sat the clause than it's value for that clause is 0, a variable can be used and have 0 weight, thus it is also represented by an X, later updated to F for purposes of assignment.
+	memset(variableValues, 'X', (numVariableValues + 1) * sizeof(char)); // is value for this variable is not used in clauses, and therefor does not matter, however, for greedy if the variables sibling already sat the clause than it's value for that clause is 0, a variable can be used and have 0 weight, thus it is also represented by an X, later updated to F for purposes of local search.
 	variableValues[0] = 'S'; // P is just a place holder, should never print except for testPrint
 
 	for(i = 0; i < numTerminals; i++){
@@ -222,7 +220,6 @@ static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerm
 				variableTable[j].negCount = 0;
 				variableTable[j].negWeightedCount = 0;
 				variableTable[j].evaluated = 'F';
-				variableTable[j].mattered = 'T';
 
 				if(terminals[i] > 0){
 					variableTable[j].indexes[variableTable[j].count] = i;
@@ -320,9 +317,7 @@ static void greedyAnalysis(int64_t* terminals, int64_t numTerminals, struct satV
 
 		// if largest is 0, it means i am examining an item that has no weight, thus its value does not matter but i still need to evaluate it
 		// this is probably due to it's sibling satifying the clauses, thus their weights do not need to be decremented as they are already at 0
-		if(largest == 0){
-			variableTable[current].mattered = 'F';
-		}else{
+		if(largest != 0){
 			// go through currents indexes and decrease all of it's siblings weights by 1 since those clauses have been satisfied and siblings have no weight in them
 			// over decrementation is fine, only happens when variable has already been evaluated and set to -1 weight previously, all other decrementations are valid
 			for(i = 0; i < variableTable[current].count; i++){
@@ -346,14 +341,8 @@ static inline void updateVariableValues(char* variableValues, struct satVariable
 	int64_t i;
 
 	for(i = 0; i < numVariableTable; i++){
-		if(variableTable[i].mattered == 'T'){
-			variableValues[variableTable[i].label] = variableTable[i].value;
-		}
-		else{
-			// variables whose weight was 0 (should never be less than 0 before evaluation) dont do anything for greedy as their value does not change the
-			// status of the clauses they are in. they are set to X, like unused variables for local search improvements.
-			variableValues[variableTable[i].label] = 'X';
-		}
+		variableValues[variableTable[i].label] = variableTable[i].value;
+
 	}
 }
 
@@ -417,8 +406,6 @@ static int64_t randint(int64_t n) {
 static inline int64_t selectRandVariable(int64_t* unSatTerminals, int64_t numUnSatTerminals, int64_t* reverseLookUpTable){
 	int64_t randIndex = randint(numUnSatTerminals);
 	int64_t selectedVariableIndex = -1;
-
-	// TODO: make sure that if i choose a variable that has value X (didnt matter) i reroll my choice
 
 	// decide if i want left or right sibling
 	// if even i want left sibling, otherwise choose right
