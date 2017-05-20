@@ -26,3 +26,9 @@ gcc version 6.3.0 (Homebrew GCC 6.3.0_1) `
 # OS' tested on
 - Ubuntu 16.04 LTS x64
 - MacOS X El Capitan
+# Usage
+- run `make remove` and `make` to compile a fresh copy of the program
+- the executable is located in the new `bin` directory
+- you may run it from there with a required input text file of clauses, just like the examples provided on moodle
+- additionally you may add a parameter for the mac number of tries for local search, the default is equal to the number of clauses in the file passed in.
+- example run `./bin/2sat test1.txt 500`
