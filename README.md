@@ -15,7 +15,13 @@ Configured with: ../src/configure -v --with-pkgversion='Ubuntu 6.2.0-3ubuntu11~1
 Thread model: posix
 gcc version 6.2.0 20160901 (Ubuntu 6.2.0-3ubuntu11~16.04)`
 and
-`MAC STUFF`
+`Using built-in specs.
+COLLECT_GCC=gcc
+COLLECT_LTO_WRAPPER=/usr/local/Cellar/gcc/6.3.0_1/libexec/gcc/x86_64-apple-darwin15.6.0/6.3.0/lto-wrapper
+Target: x86_64-apple-darwin15.6.0
+Configured with: ../configure --build=x86_64-apple-darwin15.6.0 --prefix=/usr/local/Cellar/gcc/6.3.0_1 --libdir=/usr/local/Cellar/gcc/6.3.0_1/lib/gcc/6 --enable-languages=c,c++,objc,obj-c++,fortran --program-suffix=-6 --with-gmp=/usr/local/opt/gmp --with-mpfr=/usr/local/opt/mpfr --with-mpc=/usr/local/opt/libmpc --with-isl=/usr/local/opt/isl --with-system-zlib --enable-libstdcxx-time=yes --enable-stage1-checking --enable-checking=release --enable-lto --with-build-config=bootstrap-debug --disable-werror --with-pkgversion='Homebrew GCC 6.3.0_1' --with-bugurl=https://github.com/Homebrew/homebrew-core/issues --enable-plugin --disable-nls --enable-multilib
+Thread model: posix
+gcc version 6.3.0 (Homebrew GCC 6.3.0_1) `
 # OS' tested on
 - Ubuntu 16.04 LTS x64
 - MacOS X El Capitan
