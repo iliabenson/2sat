@@ -12,6 +12,7 @@ static const int lineSize = 1024;
 struct satVariable{
 	int64_t label; // variable label, and index into variableValues array
 	char value; // it's boolean value
+	int64_t size;
 	int64_t* indexes; // locations where it appears in terminals array, even index means it is the left variable in the clause, odd means right
 	int64_t count; // number of times it appears in terminals array, also length of indexes array
 	int64_t weightedCount; // how many it appears in clauses where variables have not been assigned yet
@@ -167,24 +168,42 @@ static char* findUsedVariables(int64_t* terminals, int64_t numTerminals , int64_
 	return variableValues;
 }
 
+static void growVarTableIndexArray(struct satVariable* variable, int64_t* size){
+	*size = *size * 2;
+	variable->indexes = (int64_t*)realloc(variable->indexes,*size * sizeof(int64_t));
+	variable->negIndexes = (int64_t*)realloc(variable->negIndexes,*size * sizeof(int64_t));
+}
+
 // TODO: there is an error here, segfault
 static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerminals, int64_t numVariableTable){
 	int64_t i, j;
 	struct satVariable* variableTable = NULL;
 
-	variableTable = (struct satVariable*)calloc(numVariableTable, numVariableTable * sizeof(struct satVariable));
+	variableTable = (struct satVariable*)malloc(numVariableTable * sizeof(struct satVariable));
+
+	for(i = 0; i < numVariableTable; i++){
+		variableTable[i].label = -1;
+	}
 
 	// @NOTE: slow but i only need to do this once
 	for(i = 0; i < numTerminals; i++){
 		for(j = 0; j < numVariableTable; j++){
-			// printf("variableTable[j].label: %lld\n", variableTable[j].label); // segfaults here, for some reason calloc is not setting to 0 in ubuntu
+
 			if(variableTable[j].label == abs(terminals[i])){
 				if(terminals[i] > 0){
+					if(variableTable[j].count == variableTable[j].size){
+						growVarTableIndexArray(&variableTable[j], &variableTable[j].size);
+					}
+
 					variableTable[j].indexes[variableTable[j].count] = i;
 					variableTable[j].count++;
 					variableTable[j].weightedCount++;
 				}
 				else{
+					if(variableTable[j].negCount == variableTable[j].size){
+						growVarTableIndexArray(&variableTable[j], &variableTable[j].size);
+					}
+
 					variableTable[j].negIndexes[variableTable[j].negCount] = i;
 					variableTable[j].negCount++;
 					variableTable[j].negWeightedCount++;
@@ -192,13 +211,14 @@ static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerm
 
 				break; // found existing variable and updated it, break out of inner loop
 			}
-			else if(variableTable[j].label == 0){
+			else if(variableTable[j].label == -1){
 				variableTable[j].label = abs(terminals[i]);
 				variableTable[j].value = 'T';
-				variableTable[j].indexes = (int64_t*)malloc(numTerminals * sizeof(int64_t));
+				variableTable[j].size = 100;
+				variableTable[j].indexes = (int64_t*)malloc(variableTable[j].size * sizeof(int64_t));
 				variableTable[j].count = 0;
 				variableTable[j].weightedCount = 0;
-				variableTable[j].negIndexes = (int64_t*)malloc(numTerminals * sizeof(int64_t));
+				variableTable[j].negIndexes = (int64_t*)malloc(variableTable[j].size * sizeof(int64_t));
 				variableTable[j].negCount = 0;
 				variableTable[j].negWeightedCount = 0;
 				variableTable[j].evaluated = 'F';
@@ -220,9 +240,7 @@ static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerm
 		}
 	}
 
-	// Shrink the indexes arrays, this is a bottle neck
-	// for test 4 mem usage spikes above 2gb before shrink
-	// for test 5 mem usage spikes above 4gb before shrink
+	// Shrink the indexes arrays
 	for(j = 0; j < numVariableTable; j++){
 		variableTable[j].indexes = (int64_t*)realloc(variableTable[j].indexes, variableTable[j].count * sizeof(int64_t));
 		variableTable[j].negIndexes = (int64_t*)realloc(variableTable[j].negIndexes, variableTable[j].negCount * sizeof(int64_t));
@@ -610,7 +628,7 @@ int main(int argc, char* argv[]){
 
 	updateVariableValues(variableValues, variableTable, numVariableTable);
 	result = evaluateAssignments(terminals, numTerminals, variableValues);
-	printf("Greedy Solution: %lld\n", result);
+	printf("Greedy Solution: %lld\n", (long long int)result);
 	printValues(variableValues, numVariableValues);
 
 	// use GSAT as local search algorithm to improve answer, default for maxTries is 1/2 of the number of clauses, i think this is a good default
@@ -621,7 +639,7 @@ int main(int argc, char* argv[]){
 		maxTries = atoi(argv[2]);
 	}
 	GSAT(maxTries, &result, terminals, numTerminals, variableTable, numVariableTable, variableValues, reverseLookUpTable);
-	printf("GSAT Solution: %lld\n", result);
+	printf("GSAT Solution: %lld\n", (long long int)result);
 	printValues(variableValues, numVariableValues);
 
 	freePtr(terminals);
