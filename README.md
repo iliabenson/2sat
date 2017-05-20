@@ -1,4 +1,4 @@
-# 2sat
+# Max2sat
 
 I assume you have the following libraries installed
 #### std C libraries
