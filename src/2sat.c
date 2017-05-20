@@ -7,6 +7,7 @@
 static const int lineSize = 1024;
 
 // @TODO: verify inline functions are properly inlined
+// @TODO: need to remove mattered and X, GSAT does not account for it and the evaluation function may be thrown off since mattered is not updated on variable flip, can account for that but probably should not
 
 struct satVariable{
 	int64_t label; // variable label, and index into variableValues array
@@ -166,6 +167,7 @@ static char* findUsedVariables(int64_t* terminals, int64_t numTerminals , int64_
 	return variableValues;
 }
 
+// TODO: there is an error here, segfault
 static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerminals, int64_t numVariableTable){
 	int64_t i, j;
 	struct satVariable* variableTable = NULL;
@@ -175,6 +177,7 @@ static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerm
 	// @NOTE: slow but i only need to do this once
 	for(i = 0; i < numTerminals; i++){
 		for(j = 0; j < numVariableTable; j++){
+			// printf("variableTable[j].label: %lld\n", variableTable[j].label); // segfaults here, for some reason calloc is not setting to 0 in ubuntu
 			if(variableTable[j].label == abs(terminals[i])){
 				if(terminals[i] > 0){
 					variableTable[j].indexes[variableTable[j].count] = i;
@@ -502,7 +505,16 @@ static int64_t* removeClausesWithVariable(int64_t variableLabel, int64_t* unSatT
 	int64_t* newArray = (int64_t*)malloc(*numUnSatTerminals * sizeof(int64_t));
 
 	for(i = 0; i < *numUnSatTerminals; i++){
-		if(abs(unSatTerminals[i]) != variableLabel){
+		if(abs(unSatTerminals[i]) == variableLabel){
+			if( i % 2 == 0){
+				i++; // skip i, i + 1 skipped in loop increment
+			}
+			else{
+				size--; // reverse counter 1 to overwrite i - 1, i skipped in loop increment
+			}
+		}
+		else{
+			// add the terminal
 			newArray[size] = unSatTerminals[i];
 			size++;
 		}
