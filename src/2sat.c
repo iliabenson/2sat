@@ -6,8 +6,6 @@
 
 static const int lineSize = 1024;
 
-// @TODO: verify inline functions are properly inlined
-
 struct satVariable{
 	int64_t label; // variable label, and index into variableValues array
 	char value; // it's boolean value
@@ -172,7 +170,6 @@ static void growVarTableIndexArray(struct satVariable* variable, int64_t* size){
 	variable->negIndexes = (int64_t*)realloc(variable->negIndexes,*size * sizeof(int64_t));
 }
 
-// TODO: there is an error here, segfault
 static struct satVariable* makeVariableTable(int64_t* terminals, int64_t numTerminals, int64_t numVariableTable){
 	int64_t i, j;
 	struct satVariable* variableTable = NULL;
@@ -350,8 +347,7 @@ static inline void printValues(char* variableValues, int64_t numVariableValues){
 	int64_t i;
 
 	for(i = 1; i <= numVariableValues; i++){
-		// @TODO: make this a file instead of stdout
-		printf("%c ", variableValues[i]);
+		printf("%c", variableValues[i]);
 	}
 
 	printf("\n");
@@ -511,7 +507,7 @@ static int64_t* removeClausesWithVariable(int64_t variableLabel, int64_t* unSatT
 
 	for(i = 0; i < *numUnSatTerminals; i++){
 		if(abs(unSatTerminals[i]) == variableLabel){
-			if( i % 2 == 0){
+			if(i % 2 == 0){
 				i++; // skip i, i + 1 skipped in loop increment
 			}
 			else{
@@ -531,14 +527,14 @@ static int64_t* removeClausesWithVariable(int64_t variableLabel, int64_t* unSatT
 	return newArray;
 }
 
-static void GSAT(int64_t maxTries, int64_t* result, int64_t* terminals, int64_t numTerminals, struct satVariable* variableTable, int64_t numVariableTable, char* variableValues, int64_t* reverseLookUpTable){
+static void localSearch(int64_t maxTries, int64_t* result, int64_t* terminals, int64_t numTerminals, struct satVariable* variableTable, int64_t numVariableTable, char* variableValues, int64_t* reverseLookUpTable){
 	int64_t i;
 	int64_t lastVariableFlippedIndex = -1;
 	int64_t currentResult = 0;
 	int64_t* unSatTerminals = NULL;
 	int64_t numUnSatTerminals = 0;
 
-	// TODO: maybe modify this so that it uses all the terminals for random selection?
+	// NOTE: maybe modify this so that it uses all the terminals for random selection?
 
 	unSatTerminals = makeUnSatTerminals(&numUnSatTerminals, terminals, numTerminals, variableValues);
 
@@ -576,12 +572,45 @@ static void GSAT(int64_t maxTries, int64_t* result, int64_t* terminals, int64_t 
 			// in case the next increment would exceed maxTries and i had an unsuccessfully last check, i want to restore my previous answer
 			if(i == maxTries - 1){
 				updateVariableValues(variableValues, variableTable, numVariableTable);
-				*result = evaluateAssignments(terminals, numTerminals, variableValues);
+				*result = evaluateAssignments(terminals, numTerminals, variableValues); // extra evaluation but just in case
 			}
 		}
 	}
 
 	freePtr(unSatTerminals);
+}
+
+static void localSearchRand(int64_t maxTries, int64_t* result, int64_t* terminals, int64_t numTerminals, struct satVariable* variableTable, int64_t numVariableTable, char* variableValues, int64_t* reverseLookUpTable){
+	int64_t i;
+	int64_t lastVariableFlippedIndex = -1;
+	int64_t currentResult = 0;
+
+	for(i = 0; i < maxTries; i++){
+		// all possible clauses satisfied, i can stop
+		if(numTerminals / 2 == *result){
+			break;
+		}
+
+		lastVariableFlippedIndex = selectRandVariable(terminals, numTerminals, reverseLookUpTable);
+		flipVariableValue(&variableTable[lastVariableFlippedIndex]);
+
+		updateVariableValues(variableValues, variableTable, numVariableTable);
+		currentResult = evaluateAssignments(terminals, numTerminals, variableValues);
+
+		if(currentResult > *result){
+			*result = currentResult;
+		}
+		else{
+			// flip the value back, it will get updated next time through loop along the next selected variable being tested
+			flipVariableValue(&variableTable[lastVariableFlippedIndex]);
+
+			// in case the next increment would exceed maxTries and i had an unsuccessfully last check, i want to restore my previous answer
+			if(i == maxTries - 1){
+				updateVariableValues(variableValues, variableTable, numVariableTable);
+				*result = evaluateAssignments(terminals, numTerminals, variableValues); // extra evaluation but just in case
+			}
+		}
+	}
 }
 
 int main(int argc, char* argv[]){
@@ -598,7 +627,7 @@ int main(int argc, char* argv[]){
 
 	if(argc <= 1){
 		perror("ERROR: Must pass in file name of values!");
-		perror("Can specify the maximum number of tries for GSAT with a second parameter, must be integer");
+		perror("Can specify the maximum number of tries for local search with a second parameter, must be integer");
 		exit(EXIT_FAILURE);
 	}
 
@@ -607,26 +636,32 @@ int main(int argc, char* argv[]){
 	variableTable = makeVariableTable(terminals, numTerminals, numVariableTable);
 	reverseLookUpTable = makeReverseLookUpTable(reverseLookUpTable, numVariableValues, variableTable, numVariableTable);
 
-	// use waited greedy to make a seeder assignment for GSAT
+	// use waited greedy to make a seeder assignment for local search
 	greedyAnalysis(terminals, numTerminals, variableTable, numVariableTable, reverseLookUpTable);
 
-	// @TODO: comment this out before submission
 	// testPrint(terminals, numTerminals, variableValues, numVariableValues, variableTable, numVariableTable);
 
 	updateVariableValues(variableValues, variableTable, numVariableTable);
 	result = evaluateAssignments(terminals, numTerminals, variableValues);
 	printf("Greedy Solution: %lld\n", (long long int)result);
-	printValues(variableValues, numVariableValues);
+	//printValues(variableValues, numVariableValues);
 
-	// use GSAT as local search algorithm to improve answer, default for maxTries is 1/2 of the number of clauses, i think this is a good default
+	// use local search as local search algorithm to improve answer, default for maxTries is 1/2 of the number of clauses, i think this is a good default
 	// but the default can be over written by the user if so chosen.
-	// this version of GSAT is greedy, we do not choose a random clause, but rather we choose a random clause from all unsatisfied clauses
+	// this version of local search is greedy, we do not choose a random clause, but rather we choose a random clause from all unsatisfied clauses
 	maxTries = numTerminals / 2;
 	if(argc == 3){
 		maxTries = atoi(argv[2]);
 	}
-	GSAT(maxTries, &result, terminals, numTerminals, variableTable, numVariableTable, variableValues, reverseLookUpTable);
-	printf("GSAT Solution: %lld\n", (long long int)result);
+	printf("Using %lld as max tries for local search\n", (long long int)maxTries
+		);
+
+	localSearch(maxTries, &result, terminals, numTerminals, variableTable, numVariableTable, variableValues, reverseLookUpTable);
+	printf("local search Unsat Only Solution: %lld\n", (long long int)result);
+
+	localSearchRand(maxTries, &result, terminals, numTerminals, variableTable, numVariableTable, variableValues, reverseLookUpTable);
+	printf("local search random Solution: %lld\n", (long long int)result);
+
 	printValues(variableValues, numVariableValues);
 
 	freePtr(terminals);
